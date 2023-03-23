@@ -1,14 +1,20 @@
 package com.ify.lockscreennotification
 
+import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
+import android.app.NotificationManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.Settings
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat.startActivity
 
 class MainActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
@@ -18,33 +24,30 @@ class MainActivity : AppCompatActivity() {
 
         val notificationButton = findViewById<Button>(R.id.grant_notification)
         notificationButton.setOnClickListener {
-//            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-//            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-//            intent.putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-//            startActivity(intent)
-
-//            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-//            intent.putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-//            startActivity(intent)
-
             checkListenerServicePermission()
         }
     }
 
-    @SuppressLint("InlinedApi")
-    fun getIntentNotificationListenerSettings(): Intent {
-        val intent = Intent()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            intent.action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
-            intent.putExtra(Settings.EXTRA_APP_PACKAGE, this.packageName)
-        } else
-            intent.action = "android.settings.APP_NOTIFICATION_SETTINGS"
-        intent.putExtra("app_package", this.packageName)
-        intent.putExtra("app_uid", this.applicationInfo.uid)
-
+    @SuppressLint("InlinedApi", "ServiceCast")
+    private fun getIntentForNotificationAccess(
+        packageName: String,
+        notificationAccessServiceClassName: String
+    ): Intent {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                .putExtra(
+                    Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                    ComponentName(packageName, notificationAccessServiceClassName).flattenToString()
+                )
+        }
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        val value = "$packageName/$notificationAccessServiceClassName"
+        val key = ":settings:fragment_args_key"
+        intent.putExtra(key, value)
+        intent.putExtra(":settings:show_fragment_args", Bundle().also { it.putString(key, value) })
         return intent
-
     }
+
 
     private fun isNotificationListenerServiceAllowed(): Boolean {
         val cn = ComponentName(this, AppNotificationListenerService::class.java)
@@ -63,7 +66,12 @@ class MainActivity : AppCompatActivity() {
     private fun checkListenerServicePermission() {
         val allowed = isNotificationListenerServiceAllowed()
         if (!allowed) {
-            startActivity(getIntentNotificationListenerSettings())
+            startActivity(
+                getIntentForNotificationAccess(
+                    "com.ify.lockscreennotification",
+                    AppNotificationListenerService::class.java.name
+                )
+            )
         }
     }
 }
